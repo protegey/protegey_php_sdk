@@ -48,6 +48,19 @@ $result = $protegey->transactions->report([
     'isCash' => true,
 ]);
 
+// Bank/telco: channel, counterpartyInstitutionCode and counterpartyCountry let Pan Studio rules
+// target bank-wire and cross-border scenarios, not just mobile-money structuring.
+$protegey->transactions->report([
+    'externalTransactionId' => 'tx-00235',
+    'externalCustomerId' => 'cust-9981',
+    'direction' => 'DEBIT',
+    'amount' => 2000000,
+    'transactionType' => 'wire',
+    'channel' => 'online',
+    'counterpartyInstitutionCode' => 'ECOBKTGTG',
+    'counterpartyCountry' => 'SN',
+]);
+
 // Identity verification — no manual API call needed, the SDK starts the session and hands back the link
 $session = $protegey->kyc->startSession('cust-9981');
 // Send $session['url'] to your user however you like (SMS, email, your own hosted redirect page)
