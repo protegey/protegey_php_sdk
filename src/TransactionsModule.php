@@ -23,7 +23,10 @@ class TransactionsModule
      * lastEmailChangeAt / lastPhoneChangeAt (ISO 8601 — if you track when a credential last
      * changed, this lets a Pan Studio rule flag a large transaction shortly after, a classic
      * account-takeover pattern; lastPhoneChangeAt also covers a SIM swap for telcos. Omit any of
-     * them and the corresponding rule field simply never fires — Protegey never guesses this).
+     * them and the corresponding rule field simply never fires — Protegey never guesses this),
+     * accountBalanceBefore (the account balance right before this transaction, if you track it —
+     * lets a Pan Studio rule flag a withdrawal/transfer that drains most of the balance, a
+     * classic mule-account/account-drain signal; only meaningful for a DEBIT).
      *
      * @param array<string, mixed> $input
      * @return array<string, mixed>
