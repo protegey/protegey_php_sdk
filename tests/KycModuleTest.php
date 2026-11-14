@@ -37,12 +37,12 @@ class KycModuleTest extends TestCase
     public function testGetSessionUrlEncodesTheSessionId(): void
     {
         $mock = new MockHandler([
-            new Response(200, [], json_encode(['sessionId' => 'sess/1', 'status' => 'Approved'])),
+            new Response(200, [], json_encode(['sessionId' => 'sess/1', 'status' => 'APPROVED'])),
         ]);
         $kyc = new KycModule($this->buildClient($mock));
 
         $result = $kyc->getSession('sess/1');
 
-        $this->assertSame('Approved', $result['status']);
+        $this->assertSame('APPROVED', $result['status']);
     }
 }
