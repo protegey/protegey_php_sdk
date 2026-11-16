@@ -62,9 +62,24 @@ $protegey->transactions->report([
     'counterpartyCountry' => 'SN',
 ]);
 
+// devicePhoneNumber is your customer's own account phone number — you already know it, it's never
+// extracted from their device — so it's not covered by the "no device fingerprinting" scope above.
+$protegey->transactions->report([
+    'externalTransactionId' => 'tx-00236',
+    'externalCustomerId' => 'cust-9981',
+    'direction' => 'DEBIT',
+    'amount' => 15000,
+    'transactionType' => 'cashout',
+    'devicePhoneNumber' => '+221771234567',
+]);
+
 // Identity verification — no manual API call needed, the SDK starts the session and hands back the link
 $session = $protegey->kyc->startSession('cust-9981');
 // Send $session['url'] to your user however you like (SMS, email, your own hosted redirect page)
+
+// $email and $phone are optional — self-declared, never verified by Protegey — and feed
+// cross-partner identity-resolution matching
+$session = $protegey->kyc->startSession('cust-9981', 'awa@example.com', '+221771234567');
 
 // Polling fallback — webhook delivery is best-effort (one retry, no queue), so use this if you're
 // not sure a delivery ever arrived, or just want to double-check a session's status.
