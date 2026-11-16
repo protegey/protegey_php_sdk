@@ -26,7 +26,11 @@ class TransactionsModule
      * them and the corresponding rule field simply never fires — Protegey never guesses this),
      * accountBalanceBefore (the account balance right before this transaction, if you track it —
      * lets a Pan Studio rule flag a withdrawal/transfer that drains most of the balance, a
-     * classic mule-account/account-drain signal; only meaningful for a DEBIT).
+     * classic mule-account/account-drain signal; only meaningful for a DEBIT), customerName (the
+     * customer's display name, as you know it — self-declared, never verified by Protegey; shows
+     * up directly in the Pan Studio transactions table instead of just the opaque
+     * externalCustomerId; send it once and it's remembered on this customer's later transactions
+     * too, even if you omit it on some of them).
      *
      * @param array<string, mixed> $input
      * @return array<string, mixed>

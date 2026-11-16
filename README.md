@@ -41,6 +41,7 @@ $protegey = new Protegey('YOUR_API_KEY', 'https://api.protegey.com');
 $result = $protegey->transactions->report([
     'externalTransactionId' => 'tx-00234',
     'externalCustomerId' => 'cust-9981',
+    'customerName' => 'Awa Diallo', // self-declared, shows up directly in the Pan Studio transactions table
     'direction' => 'DEBIT',
     'amount' => 250000,
     'currency' => 'XOF',
