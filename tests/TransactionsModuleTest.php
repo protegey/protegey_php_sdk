@@ -18,7 +18,7 @@ class TransactionsModuleTest extends TestCase
     public function testReportDefaultsOccurredAtToNowWhenOmitted(): void
     {
         $mock = new MockHandler([
-            new Response(201, [], json_encode(['transactionId' => 'tx-1', 'decision' => 'clear', 'riskScore' => 0, 'alerts' => [], 'deviceAction' => null])),
+            new Response(201, [], json_encode(['transactionId' => 'tx-1', 'decision' => 'CLEAR', 'riskScore' => 0, 'alerts' => [], 'deviceAction' => null])),
         ]);
         $guzzle = new GuzzleClient(['handler' => HandlerStack::create($mock)]);
         $transactions = new TransactionsModule(new Client('key', 'https://api.protegey.test', $guzzle));
@@ -32,14 +32,14 @@ class TransactionsModuleTest extends TestCase
         ]);
 
         $this->assertSame('tx-1', $result['transactionId']);
-        $this->assertSame('clear', $result['decision']);
+        $this->assertSame('CLEAR', $result['decision']);
     }
 
     public function testReportForwardsChannelCounterpartyInstitutionCodeAndCounterpartyCountry(): void
     {
         $history = [];
         $mock = new MockHandler([
-            new Response(201, [], json_encode(['transactionId' => 'tx-1', 'decision' => 'clear', 'riskScore' => 0, 'alerts' => [], 'deviceAction' => null])),
+            new Response(201, [], json_encode(['transactionId' => 'tx-1', 'decision' => 'CLEAR', 'riskScore' => 0, 'alerts' => [], 'deviceAction' => null])),
         ]);
         $stack = HandlerStack::create($mock);
         $stack->push(Middleware::history($history));
