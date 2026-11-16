@@ -30,7 +30,9 @@ class TransactionsModule
      * customer's display name, as you know it — self-declared, never verified by Protegey; shows
      * up directly in the Pan Studio transactions table instead of just the opaque
      * externalCustomerId; send it once and it's remembered on this customer's later transactions
-     * too, even if you omit it on some of them).
+     * too, even if you omit it on some of them), devicePhoneNumber (the partner already knows
+     * this — it's their own customer's account identifier — never extracted from the device;
+     * stored encrypted).
      *
      * @param array<string, mixed> $input
      * @return array<string, mixed>

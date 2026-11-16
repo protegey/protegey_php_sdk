@@ -1,3 +1,8 @@
+## 0.6.0
+
+- `kyc->startSession()` accepts two new optional parameters, `$email` and `$phone` — forwarded to the API for cross-partner identity-resolution matching. Self-declared, never verified by Protegey. Fully backward compatible: existing single-argument calls are unaffected.
+- `transactions->report()` accepts a new optional key: `devicePhoneNumber` — the customer's own account phone number, as the partner already knows it (never extracted from the device, so this isn't covered by this SDK's "no device fingerprinting" scope). No code change needed on your side: the SDK already forwards any key you give it.
+
 ## 0.5.0
 
 - `transactions->report()` accepts a new optional key: `customerName` — shows up directly in the Pan Studio transactions table instead of just the opaque `externalCustomerId`. Self-declared, never verified by Protegey. Send it once and it's remembered on this customer's later transactions too, even if you omit it on some of them. No code change needed on your side: the SDK already forwards any key you give it.
