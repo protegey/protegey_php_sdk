@@ -14,12 +14,26 @@ class KycModule
      * Starts an identity verification session for one of your end users — no manual API call
      * needed. Returns ['sessionId' => string, 'url' => string] — the hosted verification link.
      *
+     * $email and $phone are optional and never verified by Protegey — same self-declared model as
+     * Pan Studio's other fields. They feed cross-partner identity-resolution matching, so pass
+     * them when you have them even though they're not required.
+     *
      * @return array{sessionId: string, url: string}
      */
-    public function startSession(string $externalUserId): array
+    public function startSession(string $externalUserId, ?string $email = null, ?string $phone = null): array
     {
+        $body = ['externalUserId' => $externalUserId];
+
+        if ($email !== null) {
+            $body['email'] = $email;
+        }
+
+        if ($phone !== null) {
+            $body['phone'] = $phone;
+        }
+
         /** @var array{sessionId: string, url: string} */
-        return $this->http->post('/partner-api/kyc/sessions', ['externalUserId' => $externalUserId]);
+        return $this->http->post('/partner-api/kyc/sessions', $body);
     }
 
     /**
