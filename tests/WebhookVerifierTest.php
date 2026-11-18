@@ -9,31 +9,45 @@ use Protegey\Sdk\WebhookVerifier;
 
 class WebhookVerifierTest extends TestCase
 {
+    private const SECRET = 'q8Zx1v3p0n9kq8Zx1v3p0n9kq8Zx1v3p0n9kq8Zx1v3';
+    private const PAYLOAD = '{"type":"alert.status_changed","eventId":"e1","alertId":"a1","ruleCode":"VEL-001","externalCustomerId":"cust-1","status":"CONFIRMED"}';
+
+    private static function sign(string $timestamp, string $payload, string $secret = self::SECRET): string
+    {
+        return hash_hmac('sha256', "{$timestamp}.{$payload}", $secret);
+    }
+
     public function testAcceptsACorrectlySignedPayload(): void
     {
-        $secret = 'whsec_test123';
-        $timestamp = '1700000000';
-        $payload = '{"event":"kyc.session.updated"}';
-        $signature = hash_hmac('sha256', "{$timestamp}.{$payload}", $secret);
-
-        $this->assertTrue(WebhookVerifier::verify($payload, $timestamp, $signature, $secret));
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, '1700000000', self::sign('1700000000', self::PAYLOAD), self::SECRET));
     }
 
     public function testRejectsATamperedPayload(): void
     {
-        $secret = 'whsec_test123';
-        $timestamp = '1700000000';
-        $signature = hash_hmac('sha256', "{$timestamp}.{\"event\":\"original\"}", $secret);
+        $signature = self::sign('1700000000', self::PAYLOAD);
 
-        $this->assertFalse(WebhookVerifier::verify('{"event":"tampered"}', $timestamp, $signature, $secret));
+        $this->assertFalse(WebhookVerifier::verify(str_replace('CONFIRMED', 'DISMISSED', self::PAYLOAD), '1700000000', $signature, self::SECRET));
+    }
+
+    public function testRejectsATamperedTimestamp(): void
+    {
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '1700000001', self::sign('1700000000', self::PAYLOAD), self::SECRET));
     }
 
     public function testRejectsAWrongSecret(): void
     {
-        $timestamp = '1700000000';
-        $payload = '{"event":"kyc.session.updated"}';
-        $signature = hash_hmac('sha256', "{$timestamp}.{$payload}", 'whsec_correct');
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '1700000000', self::sign('1700000000', self::PAYLOAD, 'other'), self::SECRET));
+    }
 
-        $this->assertFalse(WebhookVerifier::verify($payload, $timestamp, $signature, 'whsec_wrong'));
+    public function testRejectsEmptyHeaders(): void
+    {
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '', '', self::SECRET));
+    }
+
+    public function testOptionalToleranceRejectsStaleTimestamps(): void
+    {
+        $now = (string) time();
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $now, self::sign($now, self::PAYLOAD), self::SECRET, 300));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '1700000000', self::sign('1700000000', self::PAYLOAD), self::SECRET, 300));
     }
 }

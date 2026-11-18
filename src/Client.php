@@ -13,9 +13,12 @@ use GuzzleHttp\Exception\GuzzleException;
  * error shape. Accepts an injectable Guzzle client so tests can use a MockHandler without a real
  * network call.
  *
+ * Auth is the `x-api-key` header only — there is no Bearer token on the partner API, and whether a
+ * call runs in sandbox or live mode is decided purely by which of your two keys you pass.
+ *
  * $baseUrl is deliberately required, with NO built-in default: confirm the current value with
  * Protegey before you ship (it can differ between environments and change independently of this
- * package's version).
+ * package's version). Paths have no version prefix: `{baseUrl}/partner-api/...`.
  */
 class Client
 {
@@ -38,23 +41,40 @@ class Client
     }
 
     /** @param array<string, mixed> $body */
-    public function post(string $path, array $body): array
+    public function post(string $path, array $body = []): array
     {
         return $this->request('POST', $path, $body);
     }
 
-    public function get(string $path): array
+    /** @param array<string, mixed> $body */
+    public function patch(string $path, array $body = []): array
     {
-        return $this->request('GET', $path);
+        return $this->request('PATCH', $path, $body);
     }
 
-    /** @param array<string, mixed>|null $body */
-    private function request(string $method, string $path, ?array $body = null): array
+    /**
+     * @param array<string, scalar|null> $query null values are dropped; booleans are sent as
+     *                                          'true'/'false'
+     */
+    public function get(string $path, array $query = []): array
+    {
+        $query = array_filter($query, static fn ($value) => $value !== null);
+        $query = array_map(static fn ($value) => is_bool($value) ? ($value ? 'true' : 'false') : $value, $query);
+
+        return $this->request('GET', $path, null, $query);
+    }
+
+    /**
+     * @param array<string, mixed>|null $body
+     * @param array<string, scalar> $query
+     */
+    private function request(string $method, string $path, ?array $body = null, array $query = []): array
     {
         try {
             $response = $this->http->request($method, $this->baseUrl . $path, [
-                'headers' => ['x-api-key' => $this->apiKey],
-                ...($body !== null ? ['json' => $body] : []),
+                'headers' => ['x-api-key' => $this->apiKey, 'Accept' => 'application/json'],
+                ...($body !== null ? ['json' => (object) $body] : []),
+                ...($query !== [] ? ['query' => $query] : []),
                 'http_errors' => false,
             ]);
         } catch (GuzzleException $e) {
@@ -65,9 +85,12 @@ class Client
         $data = json_decode((string) $response->getBody(), true);
 
         if ($status < 200 || $status >= 300) {
-            $rawMessage = $data['message'] ?? $response->getReasonPhrase();
+            $body = is_array($data) ? $data : [];
+            $rawMessage = $body['message'] ?? $response->getReasonPhrase();
             $message = is_array($rawMessage) ? implode(', ', $rawMessage) : (string) $rawMessage;
-            throw new ProtegeyApiException($status, $message);
+            $errorCode = isset($body['errorCode']) && is_string($body['errorCode']) ? $body['errorCode'] : null;
+
+            throw new ProtegeyApiException($status, $message, $errorCode, $body);
         }
 
         return is_array($data) ? $data : [];

@@ -4,83 +4,68 @@ declare(strict_types=1);
 
 namespace Protegey\Sdk\Tests;
 
-use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Middleware;
-use GuzzleHttp\Psr7\Response;
-use PHPUnit\Framework\TestCase;
-use Protegey\Sdk\Client;
-use Protegey\Sdk\KycModule;
-
-class KycModuleTest extends TestCase
+class KycModuleTest extends ApiTestCase
 {
-    private function buildClient(MockHandler $mock): Client
-    {
-        $guzzle = new GuzzleClient(['handler' => HandlerStack::create($mock)]);
-
-        return new Client('test-api-key', 'https://api.protegey.test', $guzzle);
-    }
+    private const URL = 'https://capture.example.test/?enrollmentId=sess_abc&token=cap_8f3a2b1c';
 
     public function testStartSessionPostsTheExternalUserIdAndReturnsTheHostedUrl(): void
     {
-        $mock = new MockHandler([
-            new Response(201, [], json_encode(['sessionId' => 'sess_abc', 'url' => 'https://capture.example.test/?enrollmentId=sess_abc&token=cap_8f3a2b1c'])),
-        ]);
-        $kyc = new KycModule($this->buildClient($mock));
+        $result = $this->protegey(['sessionId' => 'sess_abc', 'url' => self::URL], 201)->kyc->startSession('cust-1');
 
-        $result = $kyc->startSession('cust-1');
-
+        $this->assertRequest('POST', '/partner-api/kyc/sessions');
+        $this->assertSame(['externalUserId' => 'cust-1'], $this->lastBody());
         $this->assertSame('sess_abc', $result['sessionId']);
-        $this->assertSame('https://capture.example.test/?enrollmentId=sess_abc&token=cap_8f3a2b1c', $result['url']);
+        $this->assertSame(self::URL, $result['url']);
     }
 
     public function testStartSessionForwardsEmailAndPhoneWhenGiven(): void
     {
-        $history = [];
-        $mock = new MockHandler([
-            new Response(201, [], json_encode(['sessionId' => 'sess_abc', 'url' => 'https://capture.example.test/?enrollmentId=sess_abc&token=cap_8f3a2b1c'])),
-        ]);
-        $stack = HandlerStack::create($mock);
-        $stack->push(Middleware::history($history));
-        $guzzle = new GuzzleClient(['handler' => $stack]);
-        $kyc = new KycModule(new Client('test-api-key', 'https://api.protegey.test', $guzzle));
+        $this->protegey(['sessionId' => 'sess_abc', 'url' => self::URL], 201)->kyc->startSession('cust-1', 'awa@example.com', '+221771234567');
 
-        $kyc->startSession('cust-1', 'awa@example.com', '+221771234567');
-
-        $sentBody = json_decode((string) $history[0]['request']->getBody(), true);
-        $this->assertSame('cust-1', $sentBody['externalUserId']);
-        $this->assertSame('awa@example.com', $sentBody['email']);
-        $this->assertSame('+221771234567', $sentBody['phone']);
+        $this->assertSame(['externalUserId' => 'cust-1', 'email' => 'awa@example.com', 'phone' => '+221771234567'], $this->lastBody());
     }
 
-    public function testStartSessionOmitsEmailAndPhoneWhenNotGiven(): void
+    public function testListSessionsConvertsAnUppercaseStatusToTheTitleCaseFilterValue(): void
     {
-        $history = [];
-        $mock = new MockHandler([
-            new Response(201, [], json_encode(['sessionId' => 'sess_abc', 'url' => 'https://capture.example.test/?enrollmentId=sess_abc&token=cap_8f3a2b1c'])),
-        ]);
-        $stack = HandlerStack::create($mock);
-        $stack->push(Middleware::history($history));
-        $guzzle = new GuzzleClient(['handler' => $stack]);
-        $kyc = new KycModule(new Client('test-api-key', 'https://api.protegey.test', $guzzle));
+        $page = ['data' => [['sessionId' => 's1', 'status' => 'IN_REVIEW', 'outcome' => 'MANUAL']], 'total' => 1, 'page' => 1, 'limit' => 20, 'totalPages' => 1];
+        $result = $this->protegey($page)->kyc->listSessions(['status' => 'IN_REVIEW', 'search' => 'Jane', 'page' => 2]);
 
-        $kyc->startSession('cust-1');
+        $this->assertRequest('GET', '/partner-api/kyc/sessions');
+        $this->assertSame(['status' => 'In Review', 'search' => 'Jane', 'page' => '2'], $this->lastQuery());
+        $this->assertSame('IN_REVIEW', $result['data'][0]['status']);
+    }
 
-        $sentBody = json_decode((string) $history[0]['request']->getBody(), true);
-        $this->assertArrayNotHasKey('email', $sentBody);
-        $this->assertArrayNotHasKey('phone', $sentBody);
+    public function testListSessionsMapsKycExpired(): void
+    {
+        $this->protegey(['data' => [], 'total' => 0, 'page' => 1, 'limit' => 20, 'totalPages' => 1])->kyc->listSessions(['status' => 'kyc_expired']);
+
+        $this->assertSame('Kyc Expired', $this->lastQuery()['status']);
     }
 
     public function testGetSessionUrlEncodesTheSessionId(): void
     {
-        $mock = new MockHandler([
-            new Response(200, [], json_encode(['sessionId' => 'sess/1', 'status' => 'APPROVED'])),
-        ]);
-        $kyc = new KycModule($this->buildClient($mock));
+        $result = $this->protegey(['sessionId' => 'sess/1', 'status' => 'APPROVED', 'outcome' => 'SUCCESS'])->kyc->getSession('sess/1');
 
-        $result = $kyc->getSession('sess/1');
-
+        $this->assertSame('/partner-api/kyc/sessions/sess%2F1', $this->lastRequest()->getUri()->getPath());
         $this->assertSame('APPROVED', $result['status']);
+        $this->assertSame('SUCCESS', $result['outcome']);
+    }
+
+    public function testUpdateSessionPatchesTheGivenFields(): void
+    {
+        $result = $this->protegey(['sessionId' => 's1', 'status' => 'APPROVED', 'outcome' => 'MANUAL', 'decision' => null])
+            ->kyc->updateSession('s1', ['status' => 'APPROVED', 'reviewNote' => 'Checked by hand']);
+
+        $this->assertRequest('PATCH', '/partner-api/kyc/sessions/s1');
+        $this->assertSame(['status' => 'APPROVED', 'reviewNote' => 'Checked by hand'], $this->lastBody());
+        $this->assertSame('APPROVED', $result['status']);
+    }
+
+    public function testResendSessionPostsToResend(): void
+    {
+        $result = $this->protegey(['sessionId' => 's1', 'url' => self::URL], 201)->kyc->resendSession('s1');
+
+        $this->assertRequest('POST', '/partner-api/kyc/sessions/s1/resend');
+        $this->assertSame(self::URL, $result['url']);
     }
 }
