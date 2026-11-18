@@ -4,26 +4,15 @@ declare(strict_types=1);
 
 namespace Protegey\Sdk\Tests;
 
-use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Middleware;
-use GuzzleHttp\Psr7\Response;
-use PHPUnit\Framework\TestCase;
-use Protegey\Sdk\Client;
-use Protegey\Sdk\TransactionsModule;
+use Protegey\Sdk\ProtegeyApiException;
 
-class TransactionsModuleTest extends TestCase
+class TransactionsModuleTest extends ApiTestCase
 {
+    private const RESPONSE = ['transactionId' => 'tx-uuid', 'decision' => 'CLEAR', 'riskScore' => 0, 'deviceAction' => null, 'alerts' => []];
+
     public function testReportDefaultsOccurredAtToNowWhenOmitted(): void
     {
-        $mock = new MockHandler([
-            new Response(201, [], json_encode(['transactionId' => 'tx-1', 'decision' => 'CLEAR', 'riskScore' => 0, 'alerts' => [], 'deviceAction' => null])),
-        ]);
-        $guzzle = new GuzzleClient(['handler' => HandlerStack::create($mock)]);
-        $transactions = new TransactionsModule(new Client('key', 'https://api.protegey.test', $guzzle));
-
-        $result = $transactions->report([
+        $result = $this->protegey(self::RESPONSE, 201)->transactions->report([
             'externalTransactionId' => 'tx-1',
             'externalCustomerId' => 'cust-1',
             'direction' => 'DEBIT',
@@ -31,52 +20,79 @@ class TransactionsModuleTest extends TestCase
             'transactionType' => 'cashout',
         ]);
 
-        $this->assertSame('tx-1', $result['transactionId']);
+        $this->assertRequest('POST', '/partner-api/transactions');
+        $this->assertNotFalse(\DateTimeImmutable::createFromFormat(\DateTimeInterface::ATOM, $this->lastBody()['occurredAt']));
+        $this->assertSame('tx-uuid', $result['transactionId']);
         $this->assertSame('CLEAR', $result['decision']);
     }
 
-    public function testReportForwardsChannelCounterpartyInstitutionCodeAndCounterpartyCountry(): void
+    public function testReportForwardsOptionalFieldsAndUppercasesDirectionAndSegment(): void
     {
-        $history = [];
-        $mock = new MockHandler([
-            new Response(201, [], json_encode(['transactionId' => 'tx-1', 'decision' => 'CLEAR', 'riskScore' => 0, 'alerts' => [], 'deviceAction' => null])),
-        ]);
-        $stack = HandlerStack::create($mock);
-        $stack->push(Middleware::history($history));
-        $guzzle = new GuzzleClient(['handler' => $stack]);
-        $transactions = new TransactionsModule(new Client('key', 'https://api.protegey.test', $guzzle));
-
-        $transactions->report([
+        $this->protegey(self::RESPONSE, 201)->transactions->report([
             'externalTransactionId' => 'tx-1',
             'externalCustomerId' => 'cust-1',
-            'direction' => 'DEBIT',
+            'direction' => 'debit',
+            'segment' => 'kyc2',
             'amount' => 2000000,
             'transactionType' => 'wire',
+            'occurredAt' => '2026-11-18T10:00:00Z',
             'channel' => 'online',
             'counterpartyInstitutionCode' => 'ECOBKTGTG',
             'counterpartyCountry' => 'SN',
+            'visitorId' => 'vis-1',
+            'deviceAttributes' => ['platform' => 'android', 'isVpnActive' => true],
         ]);
 
-        $sentBody = json_decode((string) $history[0]['request']->getBody(), true);
-        $this->assertSame('online', $sentBody['channel']);
-        $this->assertSame('ECOBKTGTG', $sentBody['counterpartyInstitutionCode']);
-        $this->assertSame('SN', $sentBody['counterpartyCountry']);
+        $body = $this->lastBody();
+        $this->assertSame('DEBIT', $body['direction']);
+        $this->assertSame('KYC2', $body['segment']);
+        $this->assertSame('2026-11-18T10:00:00Z', $body['occurredAt']);
+        $this->assertSame('online', $body['channel']);
+        $this->assertSame('ECOBKTGTG', $body['counterpartyInstitutionCode']);
+        $this->assertSame('SN', $body['counterpartyCountry']);
+        $this->assertSame(['platform' => 'android', 'isVpnActive' => true], $body['deviceAttributes']);
     }
 
-    public function testThrowsOnANonSuccessResponse(): void
+    public function testListSendsFiltersAsQuery(): void
     {
-        $this->expectException(\Protegey\Sdk\ProtegeyApiException::class);
+        $page = ['data' => [['transactionId' => 't1', 'amount' => '15000.00', 'decision' => 'REVIEW', 'deviceAction' => 'ALLOW']], 'total' => 1, 'page' => 1, 'limit' => 20, 'totalPages' => 1];
+        $result = $this->protegey($page)->transactions->list(['decision' => 'REVIEW', 'externalCustomerId' => 'cust-1', 'dateFrom' => null]);
 
-        $mock = new MockHandler([new Response(422, [], json_encode(['message' => 'amount must be positive']))]);
-        $guzzle = new GuzzleClient(['handler' => HandlerStack::create($mock)]);
-        $transactions = new TransactionsModule(new Client('key', 'https://api.protegey.test', $guzzle));
+        $this->assertRequest('GET', '/partner-api/transactions');
+        $this->assertSame(['decision' => 'REVIEW', 'externalCustomerId' => 'cust-1'], $this->lastQuery());
+        $this->assertSame('15000.00', $result['data'][0]['amount']);
+    }
 
-        $transactions->report([
-            'externalTransactionId' => 'tx-1',
-            'externalCustomerId' => 'cust-1',
-            'direction' => 'DEBIT',
-            'amount' => -1,
-            'transactionType' => 'cashout',
-        ]);
+    public function testGetAcceptsAnExternalTransactionId(): void
+    {
+        $result = $this->protegey(['transactionId' => 't1', 'externalTransactionId' => 'ext 1', 'decision' => 'BLOCKED', 'alerts' => []])->transactions->get('ext 1');
+
+        $this->assertRequest('GET', '/partner-api/transactions/ext%201');
+        $this->assertSame('BLOCKED', $result['decision']);
+    }
+
+    public function testThrowsOnANonSuccessResponseAndJoinsValidationMessages(): void
+    {
+        try {
+            $this->protegey(['statusCode' => 400, 'message' => ['amount must be a positive number', 'direction must be one of'], 'error' => 'Bad Request'], 400)
+                ->transactions->report(['externalTransactionId' => 'tx-1', 'externalCustomerId' => 'cust-1', 'direction' => 'DEBIT', 'amount' => -1, 'transactionType' => 'cashout']);
+            $this->fail('Expected ProtegeyApiException');
+        } catch (ProtegeyApiException $e) {
+            $this->assertSame(400, $e->status);
+            $this->assertSame('amount must be a positive number, direction must be one of', $e->getMessage());
+            $this->assertNull($e->errorCode);
+        }
+    }
+
+    public function testExposesTheErrorCodeOnGatingErrors(): void
+    {
+        try {
+            $this->protegey(['errorCode' => 'PARTNER_CONTRACT_REQUIRED', 'message' => 'Your account has no billing contract configured yet.'], 403)
+                ->transactions->report(['externalTransactionId' => 'tx-1', 'externalCustomerId' => 'cust-1', 'direction' => 'DEBIT', 'amount' => 1, 'transactionType' => 'cashout']);
+            $this->fail('Expected ProtegeyApiException');
+        } catch (ProtegeyApiException $e) {
+            $this->assertSame(403, $e->status);
+            $this->assertSame(ProtegeyApiException::PARTNER_CONTRACT_REQUIRED, $e->errorCode);
+        }
     }
 }

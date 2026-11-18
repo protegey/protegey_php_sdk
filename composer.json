@@ -1,6 +1,6 @@
 {
   "name": "protegey/sdk",
-  "description": "Official Protegey SDK for PHP backends — transaction reporting, identity verification sessions, and webhook signature verification.",
+  "description": "Official Protegey SDK for PHP backends — the full partner API (transactions, alerts, KYC, KYB, sanctions, shared signals, device/behavioral events) and webhook signature verification.",
   "type": "library",
   "license": "proprietary",
   "require": {

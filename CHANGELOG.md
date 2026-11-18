@@ -1,3 +1,17 @@
+## 0.7.0
+
+Brings the SDK in line with the current partner API (all 23 `/partner-api/*` endpoints).
+
+- New modules: `alerts` (`list`, `get`, `update`, `convertToCase`, `flagTransaction`), `kyb` (`listApplicants`, `getApplicant`, `invite`, `resendInvitation`, `screen`, `decide`), `sanctions` (`screen`), `sharedSignal` (`check`), `deviceEvents` (`record`), `behavioralEvents` (`record`).
+- `kyc`: new `listSessions()`, `updateSession()`, `resendSession()`. `listSessions()` converts an UPPER_SNAKE_CASE `status` filter to the Title Case value the API requires.
+- `transactions`: new `list()` and `get()` (by Protegey id or your `externalTransactionId`). `report()` now uppercases `direction` and `segment`, which the API requires exactly.
+- `kyb->invite()` takes `contactEmail` and/or `contactPhone` (at least one) and returns `applicationUrl`; `resendInvitation()` returns the submission plus `applicationUrl`; `decide()` maps the comment to `reason` (REJECT) or `note` (REQUEST_MORE_INFO). Leaked internal submission fields (`tokenHash`, `documentFilePath`) are stripped from KYB responses.
+- `alerts->list()` and `sanctions->screen()` lowercase the filters/`type` the API only accepts in lowercase.
+- `ProtegeyApiException` gains `$errorCode` (`PARTNER_SUSPENDED` / `PARTNER_CONTRACT_REQUIRED`) and `$body`. Backward compatible.
+- `Client` gains `patch()`, and `get()` accepts a query array.
+- `WebhookVerifier`: rejects empty headers, tolerates surrounding whitespace / uppercase hex in `X-Signature`, optional `$toleranceSeconds` replay guard, header-name and event-type constants.
+- Docs: webhook delivery is retried up to 5 times over ~3 h (not "one retry"); deduplicate on `eventId`.
+
 ## 0.6.0
 
 - `kyc->startSession()` accepts two new optional parameters, `$email` and `$phone` — forwarded to the API for cross-partner identity-resolution matching. Self-declared, never verified by Protegey. Fully backward compatible: existing single-argument calls are unaffected.
