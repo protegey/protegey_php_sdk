@@ -16,6 +16,13 @@ namespace Protegey\Sdk;
  * Event types: kyc.status_changed, kyb.status_changed, alert.created, alert.status_changed,
  * transaction.blocked, webhook.test. Deliveries are retried (up to 5 attempts over ~3 hours) and
  * carry no idempotency header — deduplicate on the payload's `eventId`.
+ *
+ * `kyc.status_changed` = { type, eventId, externalUserId, status, recommendation, sessionId,
+ * decision } — fired on an automatic result AND on a manual status change (dashboard or
+ * KycModule::updateSession()); `sessionId` is the same id startSession() returned.
+ * `kyb.status_changed` = { type, eventId, clientId, status, submissionStatus, decision }. Every
+ * status-like value (status, submissionStatus, decision, decision.manualReview.previousStatus /
+ * newStatus, recommendation) is UPPER_SNAKE_CASE.
  */
 final class WebhookVerifier
 {
