@@ -61,6 +61,48 @@ class KycModuleTest extends ApiTestCase
         $this->assertSame('APPROVED', $result['status']);
     }
 
+    public function testListSessionsForwardsTheExactExternalUserIdFilterAndExposesRecommendationAndImages(): void
+    {
+        $image = ['url' => 'https://bucket.s3.amazonaws.com/doc.jpg?X-Amz-Signature=abc', 'expiresAt' => '2026-11-19T13:00:00.000Z'];
+        $page = ['data' => [['sessionId' => 's1', 'externalUserId' => 'cust-1', 'status' => 'APPROVED', 'recommendation' => 'APPROVE', 'images' => ['documentFront' => $image, 'documentBack' => null, 'selfie' => $image, 'documentFaceCrop' => null]]], 'total' => 1, 'page' => 1, 'limit' => 20, 'totalPages' => 1];
+        $result = $this->protegey($page)->kyc->findByExternalUserId('cust-1', ['status' => 'APPROVED']);
+
+        $this->assertRequest('GET', '/partner-api/kyc/sessions');
+        $this->assertSame(['status' => 'Approved', 'externalUserId' => 'cust-1'], $this->lastQuery());
+        $row = $result['data'][0];
+        $this->assertSame('APPROVE', $row['recommendation']);
+        $this->assertSame($image, $row['images']['documentFront']);
+        $this->assertNull($row['images']['documentBack']);
+    }
+
+    public function testGetSessionReturnsRecommendationAndPresignedImages(): void
+    {
+        $image = ['url' => 'https://bucket.s3.amazonaws.com/selfie.jpg?X-Amz-Signature=abc', 'expiresAt' => '2026-11-19T13:00:00.000Z'];
+        $result = $this->protegey(['sessionId' => 's1', 'status' => 'IN_REVIEW', 'recommendation' => null, 'images' => ['documentFront' => null, 'documentBack' => null, 'selfie' => $image, 'documentFaceCrop' => null]])
+            ->kyc->getSession('s1');
+
+        $this->assertNull($result['recommendation']);
+        $this->assertSame('2026-11-19T13:00:00.000Z', $result['images']['selfie']['expiresAt']);
+    }
+
+    public function testSetStatusPatchesAnUppercasedStatusAndTheReviewNote(): void
+    {
+        $response = ['sessionId' => 's1', 'status' => 'DECLINED', 'outcome' => 'SUCCESS', 'recommendation' => 'APPROVE', 'decision' => ['manualReview' => ['previousStatus' => 'APPROVED', 'newStatus' => 'DECLINED', 'note' => 'Forged document']]];
+        $result = $this->protegey($response)->kyc->setStatus('s1', 'declined', 'Forged document');
+
+        $this->assertRequest('PATCH', '/partner-api/kyc/sessions/s1');
+        $this->assertSame(['status' => 'DECLINED', 'reviewNote' => 'Forged document'], $this->lastBody());
+        $this->assertSame('APPROVE', $result['recommendation']);
+        $this->assertSame('DECLINED', $result['decision']['manualReview']['newStatus']);
+    }
+
+    public function testSetStatusOmitsTheReviewNoteWhenNotGiven(): void
+    {
+        $this->protegey(['sessionId' => 's1', 'status' => 'IN_REVIEW'])->kyc->setStatus('s1', 'in review');
+
+        $this->assertSame(['status' => 'IN_REVIEW'], $this->lastBody());
+    }
+
     public function testResendSessionPostsToResend(): void
     {
         $result = $this->protegey(['sessionId' => 's1', 'url' => self::URL], 201)->kyc->resendSession('s1');

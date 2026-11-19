@@ -7,7 +7,7 @@ namespace Protegey\Sdk;
 use GuzzleHttp\ClientInterface;
 
 /**
- * The Protegey SDK for PHP backends — the whole partner API (transactions, alerts, KYC sessions,
+ * The Protegey SDK for PHP backends — the whole partner API (transactions, cash deposits, alerts, KYC sessions,
  * KYB applicants, sanctions screening, shared fraud signals, device and behavioral event relay),
  * called directly from your server with your own API key, plus a webhook signature verifier.
  *
@@ -30,6 +30,7 @@ use GuzzleHttp\ClientInterface;
 class Protegey
 {
     public readonly TransactionsModule $transactions;
+    public readonly CashDepositsModule $cashDeposits;
     public readonly AlertsModule $alerts;
     public readonly KycModule $kyc;
     public readonly KybModule $kyb;
@@ -42,6 +43,7 @@ class Protegey
     {
         $http = new Client($apiKey, $baseUrl, $httpClient);
         $this->transactions = new TransactionsModule($http);
+        $this->cashDeposits = new CashDepositsModule($http);
         $this->alerts = new AlertsModule($http);
         $this->kyc = new KycModule($http);
         $this->kyb = new KybModule($http);

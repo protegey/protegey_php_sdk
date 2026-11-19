@@ -1,6 +1,6 @@
 # protegey/sdk (PHP)
 
-Official Protegey SDK for PHP backends — the whole Protegey partner API (transactions, alerts,
+Official Protegey SDK for PHP backends — the whole Protegey partner API (transactions, cash deposits, alerts,
 KYC sessions, KYB applicants, sanctions screening, the shared fraud signal network, device and
 behavioral event relay) plus webhook signature verification, called directly from your server with
 your own API key.
@@ -84,13 +84,55 @@ $session = $protegey->kyc->startSession('cust-9981');
 // cross-partner identity-resolution matching
 $session = $protegey->kyc->startSession('cust-9981', 'awa@example.com', '+221771234567');
 
-// Polling fallback — use this if you're not sure a webhook delivery ever arrived (the
-// kyc.status_changed webhook carries no usable session id, only externalUserId).
-$current = $protegey->kyc->getSession($session['sessionId']); // status e.g. 'IN_REVIEW', outcome 'MANUAL'
+// Polling fallback for the kyc.status_changed webhook (whose sessionId is this same id).
+$current = $protegey->kyc->getSession($session['sessionId']);
+// status e.g. 'IN_REVIEW' (the final decision), outcome 'MANUAL',
+// recommendation 'APPROVE' | 'REVIEW' | 'REJECT' | null (Protegey's own verdict, never changed by an override)
 
 $protegey->kyc->listSessions(['status' => 'IN_REVIEW']);          // SDK converts to the 'In Review' filter value
-$protegey->kyc->updateSession($session['sessionId'], ['status' => 'APPROVED', 'reviewNote' => 'Checked by hand']);
+$protegey->kyc->findByExternalUserId('cust-9981');               // exact match = listSessions(['externalUserId' => ...])
+$protegey->kyc->setStatus($session['sessionId'], 'APPROVED', 'Checked by hand'); // = updateSession(status + reviewNote)
+$protegey->kyc->updateSession($session['sessionId'], ['fullName' => 'Awa Diallo']); // correct an OCR misread
 $protegey->kyc->resendSession($session['sessionId']);            // fresh 30-minute capture link
+```
+
+Photos come as pre-signed links in `images` (on getSession() and on every listSessions() row):
+
+```php
+$images = $current['images'];
+// ['documentFront' => ['url' => 'https://...', 'expiresAt' => '2026-11-19T13:00:00.000Z'],
+//  'documentBack' => null, 'selfie' => [...], 'documentFaceCrop' => [...]]
+```
+
+Each link is valid for **1 hour** and re-issued on every GET — fetch the session again instead of
+storing a URL. getSession() still returns the legacy base64 fields (`documentPhoto`,
+`documentBackPhoto`, `selfiePhoto`, `documentFaceCrop`) for backward compatibility.
+
+A manual status change (setStatus()/updateSession() or the dashboard) is recorded in
+`decision.manualReview` (`reviewedBy`, `reviewedAt`, `previousStatus`, `newStatus`, `note`) and
+fires the `kyc.status_changed` webhook like an automatic result.
+
+### Cash deposits
+
+```php
+$deposit = $protegey->cashDeposits->record([
+    'externalTransactionId' => 'dep-0001', // optional, generated if omitted — send it: a repeat gets a 409
+    'externalCustomerId' => 'cust-9981',
+    'customerName' => 'Moussa Traoré',
+    'amount' => 2500000,
+    'currency' => 'XOF',                    // ISO 4217, required
+    'channel' => 'BRANCH',
+    'branchId' => 'DKR-PLATEAU',
+    'location' => 'Dakar, Plateau',
+    'depositorName' => 'Awa Diallo',        // who brought the cash, if not the account holder
+    'metadata' => ['tellerId' => 'T-04'],
+]); // depositedAt defaults to now
+// ['cashDepositId' => ..., 'externalTransactionId' => 'dep-0001', 'decision' => 'REVIEW', 'riskScore' => 20, 'alerts' => [...]]
+
+$protegey->cashDeposits->list(['dateFrom' => '2026-11-01', 'minAmount' => 1000000, 'channel' => 'BRANCH', 'limit' => 100]);
+// filters: page, limit (≤100), dateFrom, dateTo, externalCustomerId, minAmount, maxAmount,
+// currency, channel, decision, branchId, agentId — amount is a decimal string ("2500000.00")
+$protegey->cashDeposits->get('dep-0001'); // Protegey cashDepositId or your externalTransactionId, + alerts
 ```
 
 ### Transactions and alerts
@@ -143,9 +185,10 @@ Any non-2xx response throws `Protegey\Sdk\ProtegeyApiException` with `$status`, 
 ### Casing
 
 Status-like values in responses and webhooks (`status`, `decision`, `decisionVerdict`,
-`disposition`, `action`, `deviceAction`, `category`, `outcome`, `ruleDecision`, `confidenceTier`)
-are UPPER_SNAKE_CASE. Other enum-ish fields stay as stored (`ruleSeverity`, `priority`,
-`matches[].source`, `submissionStatus` are lowercase). A few filters only accept a specific case
+`disposition`, `action`, `deviceAction`, `category`, `outcome`, `ruleDecision`, `confidenceTier`,
+`submissionStatus`, `previousStatus`, `newStatus`) are UPPER_SNAKE_CASE, as is KYC
+`recommendation`. Other enum-ish fields stay as stored (`ruleSeverity`, `priority`,
+`matches[].source` are lowercase). A few filters only accept a specific case
 server-side; the SDK normalises those for you (KYC list `status`, alert list `status` /
 `disposition`, sanctions `type`, transaction `direction` / `segment`).
 
@@ -170,6 +213,12 @@ $event = json_decode($payload, true);
 // transaction.blocked | webhook.test. Deliveries are retried (up to 5 attempts over ~3 h) —
 // deduplicate on $event['eventId'].
 ```
+
+- `kyc.status_changed`: `{type, eventId, externalUserId, status, recommendation, sessionId, decision}`
+  — fires on an automatic result **and** on a manual status change (dashboard or
+  `kyc->setStatus()` / `updateSession()`). `sessionId` is the id `startSession()` returned.
+- `kyb.status_changed`: `{type, eventId, clientId, status, submissionStatus, decision}` —
+  `submissionStatus` is UPPER_SNAKE_CASE (e.g. `APPROVED`).
 
 The signature is `hex(HMAC-SHA256(secret, "{X-Timestamp}.{rawBody}"))`, compared in constant time.
 Pass a fifth argument (e.g. `300`) to also reject deliveries whose timestamp is that many seconds
