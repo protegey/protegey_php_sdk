@@ -8,7 +8,7 @@ use GuzzleHttp\ClientInterface;
 
 /**
  * The Protegey SDK for PHP backends — the whole partner API (transactions, cash deposits, alerts, KYC sessions,
- * KYB applicants, sanctions screening, shared fraud signals, device and behavioral event relay),
+ * 3D liveness, KYB applicants, sanctions screening, shared fraud signals, device and behavioral event relay),
  * called directly from your server with your own API key, plus a webhook signature verifier.
  *
  * ```php
@@ -21,6 +21,7 @@ use GuzzleHttp\ClientInterface;
  *     'transactionType' => 'cashout',
  * ]);
  * $session = $protegey->kyc->startSession('cust-1');
+ * $liveness = $protegey->liveness->startReverification('cust-1');
  * ```
  *
  * $baseUrl has no default — confirm the current value with Protegey (it may differ between
@@ -33,6 +34,7 @@ class Protegey
     public readonly CashDepositsModule $cashDeposits;
     public readonly AlertsModule $alerts;
     public readonly KycModule $kyc;
+    public readonly LivenessModule $liveness;
     public readonly KybModule $kyb;
     public readonly SanctionsModule $sanctions;
     public readonly SharedSignalModule $sharedSignal;
@@ -46,6 +48,7 @@ class Protegey
         $this->cashDeposits = new CashDepositsModule($http);
         $this->alerts = new AlertsModule($http);
         $this->kyc = new KycModule($http);
+        $this->liveness = new LivenessModule($http);
         $this->kyb = new KybModule($http);
         $this->sanctions = new SanctionsModule($http);
         $this->sharedSignal = new SharedSignalModule($http);

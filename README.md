@@ -1,7 +1,7 @@
 # protegey/sdk (PHP)
 
 Official Protegey SDK for PHP backends — the whole Protegey partner API (transactions, cash deposits, alerts,
-KYC sessions, KYB applicants, sanctions screening, the shared fraud signal network, device and
+KYC sessions, 3D liveness, KYB applicants, sanctions screening, the shared fraud signal network, device and
 behavioral event relay) plus webhook signature verification, called directly from your server with
 your own API key.
 
@@ -112,6 +112,38 @@ A manual status change (setStatus()/updateSession() or the dashboard) is recorde
 `decision.manualReview` (`reviewedBy`, `reviewedAt`, `previousStatus`, `newStatus`, `note`) and
 fires the `kyc.status_changed` webhook like an automatic result.
 
+### 3D liveness
+
+A separate, paid product — billed per check where liveness was proven (KYC is unaffected and stays
+free). Two modes: a selfie-only liveness check, or a re-verification that runs the liveness check
+and then matches the face against that customer's latest KYC verification.
+
+```php
+use Protegey\Sdk\LivenessModule;
+use Protegey\Sdk\ProtegeyApiException;
+
+// Selfie-only: is there a live person in front of the camera? externalUserId is optional.
+$session = $protegey->liveness->startSession('cust-9981');
+// Send/open $session['url'] for your user — single use, valid for 30 minutes
+
+// Re-verification: liveness, then a 3D:3D match against cust-9981's latest KYC face
+try {
+    $session = $protegey->liveness->startReverification('cust-9981');
+} catch (ProtegeyApiException $e) {
+    if ($e->errorCode === LivenessModule::NO_3D_ENROLLMENT) {
+        // 400: no KYC face on file for this customer — run a KYC session first
+    }
+    throw $e;
+}
+
+$result = $protegey->liveness->getSession($session['sessionId']);
+// status 'PENDING' | 'COMPLETED' | 'EXPIRED', livenessProven true|false|null,
+// matchLevel 0 (different person) … 15 (same person) | null, matched true|false|null (re-verification only),
+// attempts, checks (one row per attempt, with `billable`), billableChecks, amount (decimal string), currency 'USD'
+
+$protegey->liveness->listSessions(['externalUserId' => 'cust-9981', 'mode' => 'REVERIFICATION']); // page, limit too
+```
+
 ### Cash deposits
 
 ```php
@@ -179,8 +211,10 @@ $protegey->behavioralEvents->record(['externalCustomerId' => 'cust-9981', 'sessi
 ### Errors
 
 Any non-2xx response throws `Protegey\Sdk\ProtegeyApiException` with `$status`, the API's
-`message` (validation messages joined with ", "), `$errorCode` (`PARTNER_SUSPENDED` /
-`PARTNER_CONTRACT_REQUIRED` on 403 account gating, otherwise null) and the decoded `$body`.
+`message` (validation messages joined with ", "), `$errorCode` (the API's `errorCode` for any
+status — e.g. `PARTNER_SUSPENDED` / `PARTNER_CONTRACT_REQUIRED` on 403 account gating,
+`NO_3D_ENROLLMENT` on a 400 from `liveness->startReverification()` — otherwise null) and the
+decoded `$body`.
 
 ### Casing
 
