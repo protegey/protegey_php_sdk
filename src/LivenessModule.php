@@ -12,11 +12,11 @@ namespace Protegey\Sdk;
  *
  * Two modes:
  * - LIVENESS: a selfie-only 3D liveness check — is a live person in front of the camera?
- * - REVERIFICATION: the same liveness check, then a 3D:3D match against the face of that
+ * - REVERIFICATION: the same liveness check, then a face match against the face of that
  *   customer's latest KYC verification — is it the same person who passed KYC?
  *
- * Statuses on the wire are UPPERCASE: PENDING, COMPLETED, EXPIRED. `matchLevel` is 0 (different
- * person) to 15 (same person), or null until a check has run.
+ * Statuses on the wire are UPPERCASE: PENDING, COMPLETED, EXPIRED. `matchLevel` is an int
+ * (higher means a stronger match; 0 means a different person), or null until a check has run.
  */
 class LivenessModule
 {
@@ -49,7 +49,7 @@ class LivenessModule
     }
 
     /**
-     * Starts a re-verification session: a 3D liveness check, then a 3D:3D match against the face
+     * Starts a re-verification session: a 3D liveness check, then a face match against the face
      * of $externalUserId's latest KYC verification (or of $referenceVerificationId, when given).
      * Same return shape as startSession().
      *
@@ -75,7 +75,7 @@ class LivenessModule
      * startReverification().
      *
      * Returns id, sessionId, mode, status (PENDING | COMPLETED | EXPIRED), externalUserId,
-     * referenceEnrollmentId, livenessProven (bool|null), matchLevel (int|null, 0–15), matched
+     * referenceEnrollmentId, livenessProven (bool|null), matchLevel (int|null), matched
      * (bool|null, REVERIFICATION only), duplicateFaceEnrollmentIds (string[]|null, not currently
      * populated), attempts, isSandbox, completedAt, createdAt, billableChecks (int), amount
      * (decimal string, USD), currency ('USD') and checks — one row per capture attempt:

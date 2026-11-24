@@ -1,6 +1,6 @@
 ## 0.9.0
 
-- New `liveness` module (3D liveness — a separate, paid product billed per check where liveness was proven; KYC is unaffected and stays free): `startSession(?$externalUserId)` (mode LIVENESS, selfie-only), `startReverification($externalUserId, ?$referenceVerificationId)` (mode REVERIFICATION — liveness then a 3D:3D match against the customer's latest KYC face), `getSession()` (status PENDING | COMPLETED | EXPIRED, livenessProven, matchLevel 0–15, matched, checks, billableChecks, amount in USD) and `listSessions()` (page, limit, externalUserId, mode). Both start methods return the hosted capture `url` (single use, 30 min).
+- New `liveness` module (3D liveness — a separate, paid product billed per check where liveness was proven; KYC is unaffected and stays free): `startSession(?$externalUserId)` (mode LIVENESS, selfie-only), `startReverification($externalUserId, ?$referenceVerificationId)` (mode REVERIFICATION — liveness then a face match against the customer's latest KYC face), `getSession()` (status PENDING | COMPLETED | EXPIRED, livenessProven, matchLevel, matched, checks, billableChecks, amount in USD) and `listSessions()` (page, limit, externalUserId, mode). Both start methods return the hosted capture `url` (single use, 30 min).
 - `ProtegeyApiException::NO_3D_ENROLLMENT` (also `LivenessModule::NO_3D_ENROLLMENT`): the 400 `errorCode` of a re-verification for a customer with no KYC face. `$errorCode` is documented as set for any status whose body carries one (it already was, in practice).
 
 ## 0.8.0

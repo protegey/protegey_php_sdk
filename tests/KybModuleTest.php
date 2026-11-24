@@ -11,12 +11,12 @@ class KybModuleTest extends ApiTestCase
 
     public function testInviteByPhoneOnlyReturnsTheApplicationUrl(): void
     {
-        $result = $this->protegey([...self::BUSINESS, 'applicationUrl' => 'https://partner.protegey.com/client-application?token=t'], 201)
+        $result = $this->protegey([...self::BUSINESS, 'applicationUrl' => 'https://portal.example.test/client-application?token=t'], 201)
             ->kyb->invite('John', contactPhone: '+237690000000');
 
         $this->assertRequest('POST', '/partner-api/kyb/applicants');
         $this->assertSame(['contactName' => 'John', 'contactPhone' => '+237690000000'], $this->lastBody());
-        $this->assertSame('https://partner.protegey.com/client-application?token=t', $result['applicationUrl']);
+        $this->assertSame('https://portal.example.test/client-application?token=t', $result['applicationUrl']);
     }
 
     public function testInviteForwardsEmailAndTemplateId(): void
@@ -51,11 +51,11 @@ class KybModuleTest extends ApiTestCase
 
     public function testResendInvitationReturnsTheSubmissionWithApplicationUrl(): void
     {
-        $result = $this->protegey([...self::SUBMISSION, 'applicationUrl' => 'https://partner.protegey.com/client-application?token=new'], 201)
+        $result = $this->protegey([...self::SUBMISSION, 'applicationUrl' => 'https://portal.example.test/client-application?token=new'], 201)
             ->kyb->resendInvitation('c1');
 
         $this->assertRequest('POST', '/partner-api/kyb/applicants/c1/resend-invitation');
-        $this->assertSame('https://partner.protegey.com/client-application?token=new', $result['applicationUrl']);
+        $this->assertSame('https://portal.example.test/client-application?token=new', $result['applicationUrl']);
         $this->assertArrayNotHasKey('tokenHash', $result);
     }
 

@@ -9,7 +9,7 @@ use Protegey\Sdk\WebhookVerifier;
 
 class WebhookVerifierTest extends TestCase
 {
-    private const SECRET = 'q8Zx1v3p0n9kq8Zx1v3p0n9kq8Zx1v3p0n9kq8Zx1v3';
+    private const SECRET = 'test_webhook_secret_not_real';
     private const PAYLOAD = '{"type":"alert.status_changed","eventId":"e1","alertId":"a1","ruleCode":"VEL-001","externalCustomerId":"cust-1","status":"CONFIRMED"}';
 
     private static function sign(string $timestamp, string $payload, string $secret = self::SECRET): string

@@ -126,7 +126,7 @@ use Protegey\Sdk\ProtegeyApiException;
 $session = $protegey->liveness->startSession('cust-9981');
 // Send/open $session['url'] for your user — single use, valid for 30 minutes
 
-// Re-verification: liveness, then a 3D:3D match against cust-9981's latest KYC face
+// Re-verification: liveness, then a face match against cust-9981's latest KYC face
 try {
     $session = $protegey->liveness->startReverification('cust-9981');
 } catch (ProtegeyApiException $e) {
@@ -138,7 +138,7 @@ try {
 
 $result = $protegey->liveness->getSession($session['sessionId']);
 // status 'PENDING' | 'COMPLETED' | 'EXPIRED', livenessProven true|false|null,
-// matchLevel 0 (different person) … 15 (same person) | null, matched true|false|null (re-verification only),
+// matchLevel int|null (higher means a stronger match; 0 means a different person), matched true|false|null (re-verification only),
 // attempts, checks (one row per attempt, with `billable`), billableChecks, amount (decimal string), currency 'USD'
 
 $protegey->liveness->listSessions(['externalUserId' => 'cust-9981', 'mode' => 'REVERIFICATION']); // page, limit too
