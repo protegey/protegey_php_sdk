@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Protegey\Sdk\Tests;
 
+use Protegey\Sdk\ProtegeyApiException;
+
 class KybModuleTest extends ApiTestCase
 {
     private const BUSINESS = ['id' => 'c1', 'contactName' => 'John', 'contactEmail' => null, 'contactPhone' => '+237690000000', 'status' => 'INVITED'];
@@ -80,5 +82,48 @@ class KybModuleTest extends ApiTestCase
 
         $this->protegey([...self::BUSINESS, 'status' => 'ACTIVE'])->kyb->decide('c1', 'APPROVE', 'ignored');
         $this->assertSame(['decision' => 'APPROVE'], $this->lastBody());
+    }
+
+    public function testRequestKycVerificationForwardsOnlyTheGivenFields(): void
+    {
+        $created = ['sessionId' => 'k1', 'kybClientId' => 'c1', 'url' => 'https://capture.example.test/?enrollmentId=k1', 'expiresAt' => '2026-11-26T09:00:00.000Z', 'emailedTo' => 'jane@example.test'];
+        $result = $this->protegey($created, 201)->kyb->requestKycVerification('c1', 'Jane Sample', 'jane@example.test');
+
+        $this->assertRequest('POST', '/partner-api/kyb/applicants/c1/kyc-sessions');
+        $this->assertSame(['fullName' => 'Jane Sample', 'email' => 'jane@example.test'], $this->lastBody());
+        $this->assertSame('2026-11-26T09:00:00.000Z', $result['expiresAt']);
+        $this->assertSame('jane@example.test', $result['emailedTo']);
+
+        $result = $this->protegey([...$created, 'emailedTo' => null], 201)->kyb->requestKycVerification('c1', externalUserId: 'director_17');
+        $this->assertSame(['externalUserId' => 'director_17'], $this->lastBody());
+        $this->assertNull($result['emailedTo']);
+    }
+
+    public function testRequestKycVerificationWithNoFieldsSendsAnEmptyObject(): void
+    {
+        $this->protegey(['sessionId' => 'k1', 'emailedTo' => null], 201)->kyb->requestKycVerification('c1');
+
+        $this->assertSame('{}', (string) $this->lastRequest()->getBody());
+    }
+
+    public function testRequestKycVerificationBeforeSubmissionThrows(): void
+    {
+        try {
+            $this->protegey(['statusCode' => 400, 'message' => 'The applicant has not submitted their application yet'], 400)
+                ->kyb->requestKycVerification('c1');
+            $this->fail('Expected ProtegeyApiException');
+        } catch (ProtegeyApiException $e) {
+            $this->assertSame(400, $e->status);
+            $this->assertStringContainsString('not submitted', $e->getMessage());
+        }
+    }
+
+    public function testListKycVerifications(): void
+    {
+        $row = ['sessionId' => 'k1', 'status' => 'APPROVED', 'expectedName' => 'Jane Sample', 'documentFullName' => 'JANE SAMPLE', 'nameMatch' => 'MATCH', 'livemode' => true];
+        $result = $this->protegey(['data' => [$row]])->kyb->listKycVerifications('c1');
+
+        $this->assertRequest('GET', '/partner-api/kyb/applicants/c1/kyc-sessions');
+        $this->assertSame('MATCH', $result['data'][0]['nameMatch']);
     }
 }

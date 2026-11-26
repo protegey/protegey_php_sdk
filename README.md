@@ -78,7 +78,9 @@ $protegey->transactions->report([
 
 // Identity verification — no manual API call needed, the SDK starts the session and hands back the link
 $session = $protegey->kyc->startSession('cust-9981');
-// Send $session['url'] to your user however you like (SMS, email, your own hosted redirect page)
+// Send $session['url'] to your user however you like (SMS, email, your own hosted redirect page).
+// The link is single use and stops working at $session['expiresAt'] (ISO 8601): your capture-link
+// lifetime setting in the portal's KYC settings — 30 min, 1 h, 24 h, 3 days or 7 days, 24 h by default.
 
 // $email and $phone are optional — self-declared, never verified by Protegey — and feed
 // cross-partner identity-resolution matching
@@ -93,7 +95,7 @@ $protegey->kyc->listSessions(['status' => 'IN_REVIEW']);          // SDK convert
 $protegey->kyc->findByExternalUserId('cust-9981');               // exact match = listSessions(['externalUserId' => ...])
 $protegey->kyc->setStatus($session['sessionId'], 'APPROVED', 'Checked by hand'); // = updateSession(status + reviewNote)
 $protegey->kyc->updateSession($session['sessionId'], ['fullName' => 'Awa Diallo']); // correct an OCR misread
-$protegey->kyc->resendSession($session['sessionId']);            // fresh 30-minute capture link
+$protegey->kyc->resendSession($session['sessionId']);            // fresh capture link + new expiresAt
 ```
 
 Photos come as pre-signed links in `images` (on getSession() and on every listSessions() row):
@@ -195,6 +197,30 @@ $protegey->kyb->screen($applicant['id']);           // sanctions/PEP on the busi
 $protegey->kyb->decide($applicant['id'], 'REQUEST_MORE_INFO', 'Please upload your licence'); // or 'APPROVE' / 'REJECT' + reason
 ```
 
+#### Identity check (KYC) of the person behind an applicant
+
+Once the applicant has submitted their application (400 before), you can ask the person behind it
+— or a director — to verify their identity. It's a standard KYC session (billed as one), linked to
+the applicant; call it as many times as you need.
+
+```php
+$check = $protegey->kyb->requestKycVerification(
+    $applicant['id'],
+    fullName: 'Jane Sample',        // default: the applicant contact name — compared with the name on the ID
+    email: 'jane@example.com',      // Protegey emails the link ONLY when email is given
+);
+// ['sessionId' => ..., 'kybClientId' => ..., 'url' => ..., 'expiresAt' => ..., 'emailedTo' => 'jane@example.com']
+// No email → emailedTo is null: relay $check['url'] yourself. A KYB-linked link is valid at least 7 days.
+
+$protegey->kyb->listKycVerifications($applicant['id']); // also in getApplicant()['kycVerifications']
+// ['data' => [['sessionId' => ..., 'status' => 'APPROVED', 'expectedName' => 'Jane Sample',
+//   'documentFullName' => 'JANE SAMPLE', 'nameMatch' => 'MATCH', 'livenessScore' => 100, ...]]]
+```
+
+`nameMatch` (`kybNameMatch` on `kyc->getSession()` and on the `kyc.status_changed` webhook, which
+also carries `kybClientId`) is `MATCH` or `MISMATCH` — order, case and accents ignored, extra middle
+names tolerated — or null before a result.
+
 ### Screening, shared signals, device and behavioral events
 
 ```php
@@ -205,6 +231,16 @@ $check = $protegey->sharedSignal->check(['phoneNumber' => '+221771234567', 'exte
 //  'matches' => [['category' => 'CONFIRMED_FRAUD', 'reportedDaysAgo' => 3], ...]]
 
 $protegey->deviceEvents->record(['eventId' => 'ev-1', 'visitorId' => $visitorId, 'externalCustomerId' => 'cust-9981']);
+
+// Optional GPS fix (device events and transactions) — a transaction of the same customer within
+// ~15 min reuses the one sent with a device event. The transaction response (and get()) returns the
+// fix it was scored with, rounded to ~100 m, plus gpsIpDistanceKm, impliedTravelSpeedKmh, isNewGpsArea.
+$protegey->deviceEvents->record([
+    'eventId' => 'ev-2',
+    'visitorId' => $visitorId,
+    'externalCustomerId' => 'cust-9981',
+    'location' => ['latitude' => 5.3599, 'longitude' => -4.0083, 'accuracyMeters' => 25, 'isMocked' => false],
+]);
 $protegey->behavioralEvents->record(['externalCustomerId' => 'cust-9981', 'sessionId' => 'sess-1', 'keystroke' => ['avgHoldTimeMs' => 95]]);
 ```
 

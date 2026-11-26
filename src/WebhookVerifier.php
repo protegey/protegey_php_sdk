@@ -18,8 +18,10 @@ namespace Protegey\Sdk;
  * carry no idempotency header — deduplicate on the payload's `eventId`.
  *
  * `kyc.status_changed` = { type, eventId, externalUserId, status, recommendation, sessionId,
- * decision } — fired on an automatic result AND on a manual status change (dashboard or
- * KycModule::updateSession()); `sessionId` is the same id startSession() returned.
+ * kybClientId, kybNameMatch, decision } — fired on an automatic result AND on a manual status
+ * change (dashboard or KycModule::updateSession()); `sessionId` is the same id startSession()
+ * returned. `kybClientId` / `kybNameMatch` ('MATCH'|'MISMATCH') are set only for a session
+ * requested via KybModule::requestKycVerification(), null otherwise.
  * `kyb.status_changed` = { type, eventId, clientId, status, submissionStatus, decision }. Every
  * status-like value (status, submissionStatus, decision, decision.manualReview.previousStatus /
  * newStatus, recommendation) is UPPER_SNAKE_CASE.

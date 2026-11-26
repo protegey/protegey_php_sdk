@@ -16,6 +16,11 @@ namespace Protegey\Sdk;
  * Photos come as pre-signed links in an `images` block — documentFront, documentBack, selfie,
  * documentFaceCrop, each `['url' => ..., 'expiresAt' => ISO 8601]` or null. The links are valid for
  * 1 hour and re-issued on every GET, so fetch the session again rather than storing a URL.
+ *
+ * Capture links expire at the returned `expiresAt`: your capture-link lifetime setting in the
+ * portal's KYC settings (30 min, 1 h, 24 h, 3 days or 7 days — 24 h by default). A session requested
+ * for a KYB applicant (KybModule::requestKycVerification()) carries its `kybClientId` (null for a
+ * plain session) and always gets at least 7 days.
  */
 class KycModule
 {
@@ -39,13 +44,14 @@ class KycModule
 
     /**
      * Starts an identity verification session for one of your end users. Returns the Protegey
-     * session id and the hosted capture link — single use, valid for 30 minutes.
+     * session id, the hosted capture link (single use) and its `expiresAt` (ISO 8601 — 24 h by
+     * default, see the class doc).
      *
      * $email and $phone are optional and never verified by Protegey — same self-declared model as
      * Pan Studio's other fields. They feed cross-partner identity-resolution matching, so pass
      * them when you have them even though they're not required.
      *
-     * @return array{sessionId: string, url: string}
+     * @return array{sessionId: string, url: string, expiresAt: string}
      */
     public function startSession(string $externalUserId, ?string $email = null, ?string $phone = null): array
     {
@@ -59,7 +65,7 @@ class KycModule
             $body['phone'] = $phone;
         }
 
-        /** @var array{sessionId: string, url: string} */
+        /** @var array{sessionId: string, url: string, expiresAt: string} */
         return $this->http->post('/partner-api/kyc/sessions', $body);
     }
 
@@ -72,7 +78,8 @@ class KycModule
      * converts it to the Title Case value this filter requires ('In Review').
      *
      * Each row: sessionId, externalUserId, status, outcome, recommendation, fullName,
-     * documentType, country, createdAt, images (pre-signed links, see the class doc — no base64).
+     * documentType, country, kybClientId (string|null), createdAt, images (pre-signed links, see
+     * the class doc — no base64).
      *
      * @param array{page?: int, limit?: int, status?: string, search?: string, externalUserId?: string} $query
      * @return array{data: list<array<string, mixed>>, total: int, page: int, limit: int, totalPages: int}
@@ -103,8 +110,11 @@ class KycModule
      * Fetches one session — a polling fallback for the `kyc.status_changed` webhook, whose
      * `sessionId` is this same id. $sessionId is the value returned by startSession().
      *
-     * Returns sessionId, externalUserId, status, outcome, recommendation, decision (object|null),
-     * fullName, documentType, country, livenessScore, faceMatchScore, images (pre-signed links,
+     * Returns sessionId, externalUserId, kybClientId (string|null), kybNameMatch ('MATCH'|'MISMATCH'|
+     * null — KYB-linked sessions only: the name on the ID document vs the name the KYB declared),
+     * status, outcome, recommendation, decision (object|null — decision.documentFullName is the name
+     * read on the ID document, kept even if you set fullName yourself), fullName, documentType,
+     * country, livenessScore, faceMatchScore, images (pre-signed links,
      * valid 1 h — see the class doc), and, for backward compatibility, documentPhoto /
      * documentBackPhoto / selfiePhoto / documentFaceCrop (base64 without a data: prefix, or null —
      * photos may arrive a couple of minutes after the decision).
@@ -122,7 +132,7 @@ class KycModule
      * dateOfBirth, placeOfBirth, profession, dateOfIssue, dateOfExpiration,
      * status ('APPROVED'|'DECLINED'|'IN_REVIEW'), reviewNote (max 1000 chars).
      *
-     * Returns sessionId, externalUserId, status, outcome, recommendation, decision. A status
+     * Returns sessionId, externalUserId, kybClientId, status, outcome, recommendation, decision. A status
      * override is recorded in decision.manualReview (reviewedBy 'Partner API', reviewedAt,
      * previousStatus / newStatus in UPPER_SNAKE_CASE, note = reviewNote) and fires the
      * kyc.status_changed webhook, like an automatic decision. `recommendation` is left unchanged.
@@ -153,14 +163,14 @@ class KycModule
     }
 
     /**
-     * Issues a fresh 30-minute capture link for an existing session and moves it to RESUBMITTED.
-     * Does not count against the sandbox daily quota.
+     * Issues a fresh capture link (with a new `expiresAt`) for an existing session and moves it to
+     * RESUBMITTED. Does not count against the sandbox daily quota.
      *
-     * @return array{sessionId: string, url: string}
+     * @return array{sessionId: string, url: string, expiresAt: string}
      */
     public function resendSession(string $sessionId): array
     {
-        /** @var array{sessionId: string, url: string} */
+        /** @var array{sessionId: string, url: string, expiresAt: string} */
         return $this->http->post('/partner-api/kyc/sessions/' . rawurlencode($sessionId) . '/resend');
     }
 }

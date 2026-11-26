@@ -105,9 +105,10 @@ class KycModuleTest extends ApiTestCase
 
     public function testResendSessionPostsToResend(): void
     {
-        $result = $this->protegey(['sessionId' => 's1', 'url' => self::URL], 201)->kyc->resendSession('s1');
+        $result = $this->protegey(['sessionId' => 's1', 'url' => self::URL, 'expiresAt' => '2026-11-20T09:00:00.000Z'], 201)->kyc->resendSession('s1');
 
         $this->assertRequest('POST', '/partner-api/kyc/sessions/s1/resend');
         $this->assertSame(self::URL, $result['url']);
+        $this->assertSame('2026-11-20T09:00:00.000Z', $result['expiresAt']);
     }
 }

@@ -33,11 +33,16 @@ class TransactionsModule
      * (balance right before a DEBIT — account-drain signal), visitorId (device id from a client
      * SDK; when omitted Protegey matches a recent device event for this customer), deviceAttributes
      * (see DeviceEventsModule::record()), devicePhoneNumber (the customer's own account phone
-     * number, which you already know — stored encrypted).
+     * number, which you already know — stored encrypted), location (GPS fix of the customer's
+     * device: { latitude, longitude, accuracyMeters?, capturedAt? (ISO 8601), isMocked? } — omit to
+     * reuse the one sent with this customer's last device event, ~15 min; feeds the GPS rule fields).
      *
      * `direction` and `segment` must be uppercase on the wire; the SDK uppercases them for you.
      *
-     * Returns { transactionId, decision, riskScore, deviceAction, alerts[] }.
+     * Returns { transactionId, decision, riskScore, deviceAction, alerts[], location }. `location`
+     * is the GPS fix the transaction was scored with, or null: { latitude, longitude (rounded to
+     * ~100 m, null once cleared after 12 months), accuracyMeters, isMocked, gpsIpDistanceKm,
+     * impliedTravelSpeedKmh, isNewGpsArea } — all nullable except isMocked.
      *
      * @param array<string, mixed> $input
      * @return array<string, mixed>
@@ -76,8 +81,8 @@ class TransactionsModule
     /**
      * One transaction by Protegey `transactionId` OR your own `externalTransactionId`. Returns
      * transactionId, externalTransactionId, externalCustomerId, decision, riskScore, deviceAction,
-     * occurredAt, createdAt and up to 50 alerts (id, alertNumber, ruleCode, status,
-     * decisionVerdict, triggeredAt). No amount/currency/direction here — use list() for those.
+     * occurredAt, createdAt, location (same shape as report()'s, or null) and up to 50 alerts (id,
+     * alertNumber, ruleCode, status, decisionVerdict, triggeredAt). No amount/currency/direction here — use list() for those.
      *
      * @return array<string, mixed>
      */

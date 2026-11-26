@@ -22,7 +22,9 @@ class DeviceEventsModule
      * encrypted), deviceAttributes — any of platform, osVersion, deviceModel, userAgent,
      * screenWidth, screenHeight, timezone, language, appVersion, isRooted, isEmulator,
      * connectionType, devicePixelRatio, manufacturer, cpuCores, totalMemoryMb, totalStorageMb,
-     * freeStorageMb, batteryLevel, isCharging, isVpnActive (unknown keys are dropped server-side).
+     * freeStorageMb, batteryLevel, isCharging, isVpnActive (unknown keys are dropped server-side),
+     * location (GPS fix of the device: { latitude, longitude, accuracyMeters?, capturedAt? (ISO
+     * 8601), isMocked? } — a transaction of the same customer within ~15 min reuses it).
      *
      * Returns { recorded: true, action: 'ALLOW'|'SOFT_CHALLENGE'|'HARD_CHALLENGE'|'BLOCK',
      * riskScore: int }.

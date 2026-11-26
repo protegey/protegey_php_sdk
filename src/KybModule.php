@@ -12,6 +12,9 @@ namespace Protegey\Sdk;
  * `submission.status`: PENDING, SUBMITTED, MORE_INFO_REQUIRED, APPROVED, REJECTED.
  * Screening `decision`: BLOCKED, REVIEW, CLEAR.
  *
+ * Identity checks (KYC) requested for an applicant via requestKycVerification() are standard KYC
+ * sessions: they follow the API key's sandbox/live mode like any KYC session (`livemode`).
+ *
  * Internal fields the API currently leaks on submissions (`tokenHash`, `documentFilePath`) are
  * removed from every response by the SDK — never rely on them.
  */
@@ -47,7 +50,8 @@ class KybModule
 
     /**
      * One applicant with its `submission` (questionnaire sections, document metadata, review and
-     * screening fields).
+     * screening fields) and `kycVerifications` (identity checks requested for it, newest first —
+     * same rows as listKycVerifications()).
      *
      * @return array<string, mixed>
      */
@@ -134,6 +138,56 @@ class KybModule
         }
 
         return $this->http->patch('/partner-api/kyb/applicants/' . rawurlencode($clientId) . '/decide', $body);
+    }
+
+    /**
+     * Asks the person behind an applicant to verify their identity — a standard KYC session linked
+     * to the KYB (billed as one). Only once the applicant has submitted their application (400
+     * otherwise); callable any number of times, each call creating a new session.
+     *
+     * All parameters are optional. $fullName (default: the applicant contact name) is compared with
+     * the name read on the ID document (`nameMatch` / `kybNameMatch`) — set it to check e.g. a
+     * director instead. Protegey emails the link only when $email is given; otherwise relay `url`
+     * yourself. $phone defaults to the applicant contact phone. $externalUserId is echoed back on the
+     * KYC session and its webhooks.
+     *
+     * Returns { sessionId, kybClientId, url (single use), expiresAt (your capture-link lifetime
+     * setting, never less than 7 days here), emailedTo (null when no $email was given) }. Results
+     * arrive on the `kyc.status_changed` webhook, with `kybClientId` and `kybNameMatch`.
+     *
+     * @return array{sessionId: string, kybClientId: string, url: string, expiresAt: string, emailedTo: string|null}
+     */
+    public function requestKycVerification(
+        string $clientId,
+        ?string $fullName = null,
+        ?string $email = null,
+        ?string $phone = null,
+        ?string $externalUserId = null,
+    ): array {
+        $body = array_filter([
+            'fullName' => $fullName,
+            'email' => $email,
+            'phone' => $phone,
+            'externalUserId' => $externalUserId,
+        ], static fn ($value) => $value !== null);
+
+        /** @var array{sessionId: string, kybClientId: string, url: string, expiresAt: string, emailedTo: string|null} */
+        return $this->http->post('/partner-api/kyb/applicants/' . rawurlencode($clientId) . '/kyc-sessions', $body);
+    }
+
+    /**
+     * Identity checks requested for an applicant, newest first (empty `data` when none). Each row:
+     * sessionId, status, outcome, recommendation, expectedName, documentFullName, nameMatch
+     * ('MATCH'|'MISMATCH'|null — expectedName vs documentFullName, order/case/accents ignored, extra
+     * middle names tolerated; null before a result), livenessScore, faceMatchScore, livemode,
+     * createdAt, updatedAt. Use KycModule::getSession($sessionId) for images and full detail.
+     *
+     * @return array{data: list<array<string, mixed>>}
+     */
+    public function listKycVerifications(string $clientId): array
+    {
+        /** @var array{data: list<array<string, mixed>>} */
+        return $this->http->get('/partner-api/kyb/applicants/' . rawurlencode($clientId) . '/kyc-sessions');
     }
 
     /**

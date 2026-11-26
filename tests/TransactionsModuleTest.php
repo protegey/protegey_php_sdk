@@ -63,6 +63,18 @@ class TransactionsModuleTest extends ApiTestCase
         $this->assertSame('15000.00', $result['data'][0]['amount']);
     }
 
+    public function testReportForwardsTheGpsLocationAndReturnsTheScoredFix(): void
+    {
+        $location = ['latitude' => 5.3599, 'longitude' => -4.0083, 'accuracyMeters' => 25, 'capturedAt' => '2026-11-19T08:59:40.000Z', 'isMocked' => false];
+        $scored = ['latitude' => 5.36, 'longitude' => -4.008, 'accuracyMeters' => 25, 'isMocked' => false, 'gpsIpDistanceKm' => 3, 'impliedTravelSpeedKmh' => null, 'isNewGpsArea' => false];
+        $result = $this->protegey(['transactionId' => 't1', 'decision' => 'CLEAR', 'alerts' => [], 'location' => $scored], 201)
+            ->transactions->report(['externalTransactionId' => 'tx-1', 'externalCustomerId' => 'cust-1', 'direction' => 'DEBIT', 'amount' => 100, 'transactionType' => 'cashout', 'location' => $location]);
+
+        $this->assertSame($location, $this->lastBody()['location']);
+        $this->assertSame(3, $result['location']['gpsIpDistanceKm']);
+        $this->assertNull($result['location']['impliedTravelSpeedKmh']);
+    }
+
     public function testGetAcceptsAnExternalTransactionId(): void
     {
         $result = $this->protegey(['transactionId' => 't1', 'externalTransactionId' => 'ext 1', 'decision' => 'BLOCKED', 'alerts' => []])->transactions->get('ext 1');
