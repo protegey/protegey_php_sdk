@@ -197,6 +197,35 @@ $protegey->kyb->screen($applicant['id']);           // sanctions/PEP on the busi
 $protegey->kyb->decide($applicant['id'], 'REQUEST_MORE_INFO', 'Please upload your licence'); // or 'APPROVE' / 'REJECT' + reason
 ```
 
+#### Importing your existing KYB base
+
+Same columns as the portal's CSV template (KYB page → Import), 1 to 1000 applicants per call.
+Imported clients are created already submitted (`APPROVED` by default, or `PENDING_REVIEW`) and are
+**never emailed**. Invalid or duplicate rows are reported in `errors` and skipped, never failing the
+call.
+
+```php
+$report = $protegey->kyb->importApplicants([
+    [
+        'legalName' => 'Acme SARL', 'country' => 'CI', 'contactName' => 'Jane Sample',
+        'contactEmail' => 'jane@example.com', // or contactPhone — at least one
+        'registrationNumber' => 'CI-ABJ-2020-B-12345', 'externalReference' => 'crm-1',
+        'owners' => [['name' => 'Jane Sample', 'ownershipPercent' => 60]],
+        'directors' => [['name' => 'John Sample', 'role' => 'CEO']],
+    ],
+], dryRun: true); // dryRun only validates
+// ['totalRows' => 1, 'importedCount' => 1, 'rejectedCount' => 0, 'errors' => [], 'importId' => null]
+// errors[]: ['row' => 0 (index in your array), 'field' => 'country'|null, 'code' => 'invalid', 'error' => '...']
+
+// Sanctions/PEP screening of the created applicants runs in the background:
+$import = $protegey->kyb->getImport($report['importId']);
+// status 'SCREENING' then 'COMPLETED', screenedCount, flaggedCount, flaggedClientIds
+$protegey->kyb->listApplicants(['importId' => $report['importId']]);
+```
+
+A flagged applicant has a match to review — Protegey never rejects it for you. Applicants carry
+`source` (`invitation` | `import`), `externalReference` and `importBatchId`.
+
 #### Identity check (KYC) of the person behind an applicant
 
 Once the applicant has submitted their application (400 before), you can ask the person behind it

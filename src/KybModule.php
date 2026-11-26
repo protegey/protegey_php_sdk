@@ -9,6 +9,8 @@ namespace Protegey\Sdk;
  * has no sandbox/live split.
  *
  * Applicant (business) `status`: INVITED, PENDING_REVIEW, MORE_INFO_REQUIRED, ACTIVE, REJECTED.
+ * Every applicant carries `source` ('invitation'|'import'), `externalReference` (your id, set by an
+ * import, or null) and `importBatchId` (the import that created it, or null).
  * `submission.status`: PENDING, SUBMITTED, MORE_INFO_REQUIRED, APPROVED, REJECTED.
  * Screening `decision`: BLOCKED, REVIEW, CLEAR.
  *
@@ -32,9 +34,10 @@ class KybModule
 
     /**
      * Lists applicants, newest first, each with its `submission` (or null). Accepted keys: page,
-     * limit, search, status (any case), stage ('invited'|'responded').
+     * limit, search, status (any case), stage ('invited'|'responded'), importId (only the applicants
+     * created by that import — see importApplicants()).
      *
-     * @param array{page?: int, limit?: int, search?: string, status?: string, stage?: string} $query
+     * @param array{page?: int, limit?: int, search?: string, status?: string, stage?: string, importId?: string} $query
      * @return array{data: list<array<string, mixed>>, total: int, page: int, limit: int, totalPages: int}
      */
     public function listApplicants(array $query = []): array
@@ -88,6 +91,56 @@ class KybModule
         ], static fn ($value) => $value !== null);
 
         return $this->http->post('/partner-api/kyb/applicants', $body);
+    }
+
+    /**
+     * Imports your existing KYB clients (1 to 1000) — same columns as the portal CSV template (KYB
+     * page → Import). Each applicant: legalName, country (ISO 3166-1 alpha-2), contactName
+     * (required); contactEmail or contactPhone (at least one); optional registrationNumber,
+     * tradingName, legalStatus, incorporationDate (YYYY-MM-DD), address, website,
+     * owners [{name, ownershipPercent?}], directors [{name, role?}], status ('APPROVED' — default —
+     * or 'PENDING_REVIEW'), externalReference (your id, unique).
+     *
+     * Valid applicants are created already submitted and are never emailed. Invalid or duplicate
+     * ones (same contactEmail, registrationNumber or externalReference as an existing client or
+     * another row) are reported in `errors` and skipped — they never fail the call. Sanctions/PEP
+     * screening then runs in the background: follow it with getImport(). $dryRun only validates.
+     *
+     * Returns { totalRows, importedCount, rejectedCount, errors: [{ row (0-based index in
+     * $applicants), field (or null), code, error }], importId (null on a dry run or when nothing was
+     * created) }. `code`: required, invalid, contact_required, unknown_field, column_count,
+     * duplicate_in_file, duplicate_existing.
+     *
+     * @param list<array<string, mixed>> $applicants
+     * @return array{totalRows: int, importedCount: int, rejectedCount: int, errors: list<array{row: int, field: string|null, code: string, error: string}>, importId: string|null}
+     */
+    public function importApplicants(array $applicants, bool $dryRun = false): array
+    {
+        if ($applicants === [] || count($applicants) > 1000) {
+            throw new \InvalidArgumentException('Protegey: 1 to 1000 applicants per import');
+        }
+
+        $body = ['applicants' => array_values($applicants)];
+        if ($dryRun) {
+            $body['dryRun'] = true;
+        }
+
+        /** @var array{totalRows: int, importedCount: int, rejectedCount: int, errors: list<array{row: int, field: string|null, code: string, error: string}>, importId: string|null} */
+        return $this->http->post('/partner-api/kyb/applicants/import', $body);
+    }
+
+    /**
+     * Follows an import's background screening. Returns { importId, status ('SCREENING' then
+     * 'COMPLETED'), source ('api'|'portal'), totalRows, importedCount, rejectedCount, screenedCount,
+     * flaggedCount, flaggedClientIds (up to 500 — getApplicant() for the match detail), createdAt,
+     * completedAt (or null) }. A flagged applicant has a sanctions/PEP match to review on the
+     * business, an owner or a director — Protegey never rejects it for you.
+     *
+     * @return array<string, mixed>
+     */
+    public function getImport(string $importId): array
+    {
+        return $this->http->get('/partner-api/kyb/imports/' . rawurlencode($importId));
     }
 
     /**

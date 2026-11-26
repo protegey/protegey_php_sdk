@@ -126,4 +126,41 @@ class KybModuleTest extends ApiTestCase
         $this->assertRequest('GET', '/partner-api/kyb/applicants/c1/kyc-sessions');
         $this->assertSame('MATCH', $result['data'][0]['nameMatch']);
     }
+
+    public function testImportApplicantsPostsTheRowsAndReturnsTheReport(): void
+    {
+        $rows = [
+            ['legalName' => 'Acme SARL', 'country' => 'CI', 'contactName' => 'Jane Sample', 'contactEmail' => 'jane@example.test', 'externalReference' => 'crm-1'],
+            ['legalName' => 'Beta SA', 'country' => 'SN', 'contactName' => 'John Sample'],
+        ];
+        $report = ['totalRows' => 2, 'importedCount' => 1, 'rejectedCount' => 1, 'errors' => [['row' => 1, 'field' => null, 'code' => 'contact_required', 'error' => 'contactEmail or contactPhone is required']], 'importId' => 'imp-1'];
+        $result = $this->protegey($report)->kyb->importApplicants($rows);
+
+        $this->assertRequest('POST', '/partner-api/kyb/applicants/import');
+        $this->assertSame(['applicants' => $rows], $this->lastBody());
+        $this->assertSame('contact_required', $result['errors'][0]['code']);
+        $this->assertSame('imp-1', $result['importId']);
+
+        $this->protegey([...$report, 'importId' => null])->kyb->importApplicants($rows, dryRun: true);
+        $this->assertTrue($this->lastBody()['dryRun']);
+    }
+
+    public function testImportApplicantsRequires1To1000Rows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->protegey()->kyb->importApplicants([]);
+    }
+
+    public function testGetImportAndListByImportId(): void
+    {
+        $result = $this->protegey(['importId' => 'imp-1', 'status' => 'COMPLETED', 'flaggedCount' => 1, 'flaggedClientIds' => ['c1'], 'completedAt' => '2026-11-26T09:00:00.000Z'])
+            ->kyb->getImport('imp-1');
+        $this->assertRequest('GET', '/partner-api/kyb/imports/imp-1');
+        $this->assertSame(['c1'], $result['flaggedClientIds']);
+
+        $page = ['data' => [[...self::BUSINESS, 'source' => 'import', 'externalReference' => 'crm-1', 'importBatchId' => 'imp-1', 'submission' => null]], 'total' => 1, 'page' => 1, 'limit' => 20, 'totalPages' => 1];
+        $list = $this->protegey($page)->kyb->listApplicants(['importId' => 'imp-1']);
+        $this->assertSame(['importId' => 'imp-1'], $this->lastQuery());
+        $this->assertSame('import', $list['data'][0]['source']);
+    }
 }
