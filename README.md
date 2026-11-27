@@ -114,6 +114,11 @@ A manual status change (setStatus()/updateSession() or the dashboard) is recorde
 `decision.manualReview` (`reviewedBy`, `reviewedAt`, `previousStatus`, `newStatus`, `note`) and
 fires the `kyc.status_changed` webhook like an automatic result.
 
+Partner groups only: getSession() carries `groupPresence` — the same person's KYC at sister entities
+of your group (`[['entity' => ..., 'status' => 'APPROVED', 'createdAt' => ..., 'matchedOn' => ['FACE',
+'GOVERNMENT_ID']]]`), or null when none or when you are in no group. It's information for your
+reviewer: being a client of two sister entities is normal.
+
 ### 3D liveness
 
 A separate, paid product — billed per check where liveness was proven (KYC is unaffected and stays
@@ -257,7 +262,10 @@ $protegey->sanctions->screen('John Doe', 'person'); // decision BLOCKED | REVIEW
 
 $check = $protegey->sharedSignal->check(['phoneNumber' => '+221771234567', 'externalCustomerId' => 'cust-9981']);
 // ['flagged' => true, 'category' => 'CONFIRMED_FRAUD', 'flagConfidence' => 37, 'matchCount' => 2,
-//  'matches' => [['category' => 'CONFIRMED_FRAUD', 'reportedDaysAgo' => 3], ...]]
+//  'groupMatchCount' => 1,
+//  'matches' => [['category' => 'CONFIRMED_FRAUD', 'reportedDaysAgo' => 3, 'groupEntity' => 'Sample Pay Senegal'],
+//                ['category' => 'IDENTITY_THEFT', 'reportedDaysAgo' => 40, 'groupEntity' => null]]]
+// groupEntity names a sister entity of your own partner group; the public network stays anonymous (null).
 
 $protegey->deviceEvents->record(['eventId' => 'ev-1', 'visitorId' => $visitorId, 'externalCustomerId' => 'cust-9981']);
 

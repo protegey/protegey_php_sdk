@@ -23,16 +23,19 @@ class SharedSignalModule
      * raised.
      *
      * Returns { flagged, category, reportedDaysAgo, flagConfidence (0–100|null), matchCount,
-     * matches: [{ category, reportedDaysAgo }] } — category is CONFIRMED_FRAUD | IDENTITY_THEFT |
-     * MONEY_LAUNDERING | OTHER (null at the root when not flagged). The reporting partner's
-     * identity is never returned.
+     * groupMatchCount, matches: [{ category, reportedDaysAgo, groupEntity }] } — category is
+     * CONFIRMED_FRAUD | IDENTITY_THEFT | MONEY_LAUNDERING | OTHER (null at the root when not
+     * flagged). The reporting partner's identity is never returned, except for a sister entity of
+     * your own partner group: `groupEntity` is then its name (null for the public network, which
+     * stays anonymous) and `groupMatchCount` counts those reports (0 when you are in no group).
+     * Both are optional: older API versions omit them.
      *
      * @param array{phoneNumber?: string, email?: string, deviceFingerprint?: string, governmentId?: string, personIdentityId?: string, externalCustomerId?: string} $input
-     * @return array{flagged: bool, category: ?string, reportedDaysAgo: ?int, flagConfidence: ?int, matchCount: int, matches: list<array{category: string, reportedDaysAgo: int}>}
+     * @return array{flagged: bool, category: ?string, reportedDaysAgo: ?int, flagConfidence: ?int, matchCount: int, groupMatchCount?: int, matches: list<array{category: string, reportedDaysAgo: int, groupEntity?: ?string}>}
      */
     public function check(array $input): array
     {
-        /** @var array{flagged: bool, category: ?string, reportedDaysAgo: ?int, flagConfidence: ?int, matchCount: int, matches: list<array{category: string, reportedDaysAgo: int}>} */
+        /** @var array{flagged: bool, category: ?string, reportedDaysAgo: ?int, flagConfidence: ?int, matchCount: int, groupMatchCount?: int, matches: list<array{category: string, reportedDaysAgo: int, groupEntity?: ?string}>} */
         return $this->http->post('/partner-api/shared-signal/check', $input);
     }
 }

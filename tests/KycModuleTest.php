@@ -85,6 +85,25 @@ class KycModuleTest extends ApiTestCase
         $this->assertSame('2026-11-19T13:00:00.000Z', $result['images']['selfie']['expiresAt']);
     }
 
+    public function testGetSessionExposesGroupPresenceAndNetworkFlagGroupEntities(): void
+    {
+        $presence = [['entity' => 'Sample Pay Senegal', 'status' => 'APPROVED', 'createdAt' => '2026-03-02T10:00:00.000Z', 'matchedOn' => ['FACE', 'GOVERNMENT_ID']]];
+        $decision = ['identityResolution' => ['networkFlag' => ['flagged' => true, 'flagConfidence' => 40, 'matchCount' => 1, 'groupEntities' => ['Sample Pay Senegal']]]];
+        $result = $this->protegey(['sessionId' => 's1', 'status' => 'APPROVED', 'groupPresence' => $presence, 'decision' => $decision])
+            ->kyc->getSession('s1');
+
+        $this->assertSame($presence, $result['groupPresence']);
+        $this->assertSame(['Sample Pay Senegal'], $result['decision']['identityResolution']['networkFlag']['groupEntities']);
+    }
+
+    public function testGetSessionGroupPresenceIsNullOutsideAGroup(): void
+    {
+        $result = $this->protegey(['sessionId' => 's1', 'status' => 'APPROVED', 'groupPresence' => null])->kyc->getSession('s1');
+
+        $this->assertArrayHasKey('groupPresence', $result);
+        $this->assertNull($result['groupPresence']);
+    }
+
     public function testSetStatusPatchesAnUppercasedStatusAndTheReviewNote(): void
     {
         $response = ['sessionId' => 's1', 'status' => 'DECLINED', 'outcome' => 'SUCCESS', 'recommendation' => 'APPROVE', 'decision' => ['manualReview' => ['previousStatus' => 'APPROVED', 'newStatus' => 'DECLINED', 'note' => 'Forged document']]];

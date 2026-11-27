@@ -160,7 +160,10 @@ class KybModule
     /**
      * Runs sanctions/PEP screening on the business name and each declared owner, and stores the
      * result on the submission. Returns { business, owners[], screenedAt, provider, providers,
-     * defaultListChecked, degraded, fallbackReason? }.
+     * defaultListChecked, degraded, fallbackReason?, networkFlags? }. `networkFlags` (fixed
+     * questionnaire only: shared-network check of the business phone / owner tax ids) is a list of
+     * { label, flagged, matchCount, flagConfidence, groupEntities? } — `groupEntities` lists the
+     * entities of your own partner group that reported it (the public network stays anonymous).
      *
      * @return array<string, mixed>
      */

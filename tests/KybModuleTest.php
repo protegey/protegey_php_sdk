@@ -69,6 +69,14 @@ class KybModuleTest extends ApiTestCase
         $this->assertSame('REVIEW', $result['business']['decision']);
     }
 
+    public function testScreenExposesNetworkFlagGroupEntities(): void
+    {
+        $flag = ['label' => 'Business phone', 'flagged' => true, 'matchCount' => 1, 'flagConfidence' => 40, 'groupEntities' => ['Sample Pay Senegal']];
+        $result = $this->protegey(['business' => ['decision' => 'CLEAR'], 'owners' => [], 'networkFlags' => [$flag]])->kyb->screen('c1');
+
+        $this->assertSame(['Sample Pay Senegal'], $result['networkFlags'][0]['groupEntities']);
+    }
+
     public function testDecideMapsTheCommentToReasonOrNote(): void
     {
         $this->protegey([...self::BUSINESS, 'status' => 'REJECTED'])->kyb->decide('c1', 'reject', 'Shell company');

@@ -113,8 +113,13 @@ class KycModule
      * Returns sessionId, externalUserId, kybClientId (string|null), kybNameMatch ('MATCH'|'MISMATCH'|
      * null — KYB-linked sessions only: the name on the ID document vs the name the KYB declared),
      * status, outcome, recommendation, decision (object|null — decision.documentFullName is the name
-     * read on the ID document, kept even if you set fullName yourself), fullName, documentType,
-     * country, livenessScore, faceMatchScore, images (pre-signed links,
+     * read on the ID document, kept even if you set fullName yourself;
+     * decision.identityResolution.networkFlag, when present, may carry `groupEntities`: the entities
+     * of your own partner group that reported this person), fullName, documentType,
+     * country, livenessScore, faceMatchScore, groupPresence (partner groups only: the same person's
+     * KYC at sister entities of your group — list of { entity, status, createdAt, matchedOn: list of
+     * FACE|GOVERNMENT_ID|PHONE|EMAIL }, or null when none or when you are in no group; information
+     * for your reviewer, being a client of two sister entities is normal), images (pre-signed links,
      * valid 1 h — see the class doc), and, for backward compatibility, documentPhoto /
      * documentBackPhoto / selfiePhoto / documentFaceCrop (base64 without a data: prefix, or null —
      * photos may arrive a couple of minutes after the decision).

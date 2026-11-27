@@ -35,6 +35,17 @@ class ScreeningAndEventsTest extends ApiTestCase
         $this->assertSame(['category' => 'IDENTITY_THEFT', 'reportedDaysAgo' => 40], $result['matches'][1]);
     }
 
+    public function testSharedSignalCheckExposesGroupMatches(): void
+    {
+        $response = ['flagged' => true, 'category' => 'CONFIRMED_FRAUD', 'reportedDaysAgo' => 12, 'flagConfidence' => 86, 'matchCount' => 2, 'groupMatchCount' => 1,
+            'matches' => [['category' => 'CONFIRMED_FRAUD', 'reportedDaysAgo' => 12, 'groupEntity' => 'Sample Pay Senegal'], ['category' => 'IDENTITY_THEFT', 'reportedDaysAgo' => 140, 'groupEntity' => null]]];
+        $result = $this->protegey($response, 201)->sharedSignal->check(['phoneNumber' => '+221771234567']);
+
+        $this->assertSame(1, $result['groupMatchCount']);
+        $this->assertSame('Sample Pay Senegal', $result['matches'][0]['groupEntity']);
+        $this->assertNull($result['matches'][1]['groupEntity']);
+    }
+
     public function testDeviceEventsRecord(): void
     {
         $result = $this->protegey(['recorded' => true, 'action' => 'SOFT_CHALLENGE', 'riskScore' => 15], 201)
